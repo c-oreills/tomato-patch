@@ -46,41 +46,68 @@
                  (conj (into (array-map) (sort other-tomatoes)) user-tomato)
                  (map (partial map +)
                       (conj (vec tomato-positions) [0 0])
-                      (repeat [(/ js/window.innerWidth 2) (/ js/window.innerHeight 2)])
-                      ))))))
+                      (repeat [(/ js/window.innerWidth 2) (/ js/window.innerHeight 2)])))))))
 
 
 (swap! app-state position-tomatoes)
 
 
-(defn tomato-view [[name tomato] _]
-  (reify
-    om/IRender
-    (render
-     [_]
-     (let [tomato-perc (min-max
-                          (- 1
-                             (/ (:secs-left tomato)
-                                tomato-length)))
-           secs-left (:secs-left tomato)]
-       (dom/div #js {:className "tomato-container"
-                     :style #js {:top (:y tomato)
-                                 :left (:x tomato)}}
+(defn friendly-secs-left [secs-left]
+  (str
+   (friendly-time (js/Math.abs secs-left))
+   (if (neg? secs-left) " overtime")))
 
-                (dom/div #js {:className "text-center"}
-                         name)
-                (dom/div #js {:className (str "tomato-wrapper"
-                                              (if (and (neg? secs-left)
-                                                       (current-user? name)) " pulse"))}
-                         (dom/div #js {:className "tomato shadow"})
-                         (dom/div #js {:className "tomato"
-                                       :style #js {:-webkit-clip-path
-                                                   (dial-path 150 140 tomato-perc)}})
-                         )
-                (dom/div #js {:className "text-center"}
-                         (str
-                          (friendly-time (js/Math.abs secs-left))
-                          (if (neg? secs-left) " overtime"))))))))
+
+(defn tomato-wrapper-class-name [secs-left name]
+  (str "tomato-wrapper"
+       (if
+         (and (neg? secs-left)
+              (current-user? name))
+         " pulse")))
+
+
+(defn tomato-view [[name tomato] owner]
+  (reify
+    om/IDidUpdate
+    (did-update
+     [_ _ prev-state]
+     (if-not (contains? prev-state :height-offset)
+       (let [set-offset! (fn [dim node-prop]
+                           (om/set-state!
+                            owner dim
+                            (->
+                             (om/get-node owner)
+                             (aget node-prop)
+                             (/ 2)
+                             (-))))]
+         (do
+           (set-offset! :height-offset "offsetHeight")
+           (set-offset! :width-offset "offsetWidth") ))))
+    om/IRenderState
+    (render-state [_ {:keys [:height-offset :width-offset]}]
+                  (js/console.log "meown" height-offset)
+     (let [secs-left (:secs-left tomato)
+           tomato-perc (min-max
+                        (- 1 (/ secs-left tomato-length)))]
+       (dom/div
+        #js {:className "tomato-container"
+             :style #js {:top (+ (:y tomato)
+                                 (or height-offset -9999))
+                         :left (+ (:x tomato)
+                                  (or width-offset -9999))}}
+        (dom/div
+         #js {:className "text-center"}
+         name)
+        (dom/div
+         #js {:className (tomato-wrapper-class-name secs-left name)}
+         (dom/div #js {:className "tomato shadow"})
+         (dom/div #js {:className "tomato"
+                       :style #js {:-webkit-clip-path
+                                   (dial-path 150 140 tomato-perc)}})
+         )
+        (dom/div
+         #js {:className "text-center"}
+         (friendly-secs-left secs-left)))))))
 
 (comment
   (time/in-seconds

@@ -1,10 +1,9 @@
 (ns tomato-patch.core
   (:require [clojure.string :as string]
-            [om.core :as om :include-macros true]
-            [om.dom :as dom :include-macros true]
             [cljs-time.core :as time]
             [cljs-time.coerce :as time-coerce]
             [tomato-patch.util :refer [map-map friendly-time dial-path min-max circle-positions spy]]
+            [reagent.core :as reagent :refer [atom]]
             ))
 
 (enable-console-print!)
@@ -37,7 +36,7 @@
 (defn position-tomatoes [state]
   (let [tomatoes (:tomatoes state)
         n (count tomatoes)
-        rad (* (spy (min js/window.innerHeight js/window.innerWidth)) 0.4)
+        rad (* (min js/window.innerHeight js/window.innerWidth) 0.4)
         tomato-positions (circle-positions (- n 1) rad)
         {other-tomatoes false [user-tomato] true} (group-by (comp current-user? first) tomatoes)]
     (assoc state :tomatoes
@@ -66,68 +65,61 @@
          " pulse")))
 
 
-(defn tomato-view [[name tomato] owner]
-  (reify
-    om/IDidUpdate
-    (did-update
-     [_ _ prev-state]
-     (if-not (contains? prev-state :height-offset)
-       (let [set-offset! (fn [dim node-prop]
-                           (om/set-state!
-                            owner dim
-                            (->
-                             (om/get-node owner)
-                             (aget node-prop)
-                             (/ 2)
-                             (-))))]
-         (do
-           (set-offset! :height-offset "offsetHeight")
-           (set-offset! :width-offset "offsetWidth") ))))
-    om/IRenderState
-    (render-state [_ {:keys [:height-offset :width-offset]}]
-                  (js/console.log "meown" height-offset)
-     (let [secs-left (:secs-left tomato)
-           tomato-perc (min-max
-                        (- 1 (/ secs-left tomato-length)))]
-       (dom/div
-        #js {:className "tomato-container"
-             :style #js {:top (+ (:y tomato)
-                                 (or height-offset -9999))
-                         :left (+ (:x tomato)
-                                  (or width-offset -9999))}}
-        (dom/div
-         #js {:className "text-center"}
-         name)
-        (dom/div
-         #js {:className (tomato-wrapper-class-name secs-left name)}
-         (dom/div #js {:className "tomato shadow"})
-         (dom/div #js {:className "tomato"
-                       :style #js {:-webkit-clip-path
-                                   (dial-path 150 140 tomato-perc)}})
-         )
-        (dom/div
-         #js {:className "text-center"}
-         (friendly-secs-left secs-left)))))))
-
-(comment
-  (time/in-seconds
-   (time/interval
-    (time/minus (:ending tomato) (time/minutes 20))
-    (:ending tomato))))
+(defn -tomato-view
+  [[name tomato]]
+  (let [{:keys [:height-offset :width-offset]} @app-state
+        secs-left (:secs-left tomato)
+        tomato-perc (min-max
+                     (- 1 (/ secs-left tomato-length)))]
+    [:div.tomato-container
+     {:style {:top (+ (:y tomato) height-offset)
+              :left (+ (:x tomato) width-offset)}}
+     [:div.text-center name]
+     [:div
+      {:class (tomato-wrapper-class-name secs-left name)}
+      [:div.tomato.shadow]
+      [:div.tomato
+       {:style {:-webkit-clip-path
+                (dial-path 150 140 tomato-perc)}}]]
+     [:div.text-center
+      (friendly-secs-left secs-left)]]))
 
 
-(defn tomatoes-view [app owner]
-  (reify
-    om/IRender
-    (render [_]
-            (apply dom/div nil
-                   (om/build-all tomato-view (:tomatoes app) )))))
+(defn window-resize []
+  (swap! app-state assoc :resize true))
 
 
-(om/root
- tomatoes-view
- app-state
- {:target (. js/document (getElementById "app"))})
+(def tomato-view
+  (with-meta -tomato-view
+    {:component-did-mount
+     window-resize ; instantly force rerender with offsets
+     :component-did-update
+     (fn
+       [this _]
+       (if (contains? @app-state :resize)
+         (let [set-offset! (fn [dim node-prop]
+                             (swap!
+                              app-state assoc dim
+                              (->
+                               (reagent/dom-node this)
+                               (aget node-prop)
+                               (/ 2)
+                               (-))))]
+           (do
+             (set-offset! :height-offset "offsetHeight")
+             (set-offset! :width-offset "offsetWidth")
+             (swap! app-state dissoc :resize)))))}))
+
+
+(defn tomatoes-view []
+  [:div
+   (for [[name tomato] (:tomatoes @app-state)]
+     ^{:key name} [tomato-view [name tomato]])])
+
+
+(reagent/render-component
+ [tomatoes-view]
+ (. js/document (getElementById "app")))
 
 
 (defn countdown []

@@ -5,7 +5,7 @@
    [tomato-patch.dispatcher :refer [register-callback]]
    [tomato-patch.stores.tick-store :refer [get-time]]
    [tomato-patch.stores.user-store :refer [current-user? get-current-user-id]]
-   [tomato-patch.util :refer [map-map dial-path circle-positions]]))
+   [tomato-patch.util :refer [dial-path circle-positions]]))
 
 
 (def tomato-length (* 25 60))

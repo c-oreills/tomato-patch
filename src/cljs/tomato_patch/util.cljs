@@ -9,10 +9,6 @@
   v)
 
 
-(defn map-map [m f]
-  (into {} (for [[k v] m] [k (f v)])))
-
-
 (defn friendly-time [secs]
   (let [mins (int (/ secs 60))
         secs (mod secs 60)]

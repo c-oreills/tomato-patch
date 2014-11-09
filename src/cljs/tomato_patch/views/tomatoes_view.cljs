@@ -6,5 +6,5 @@
 
 (defn tomatoes-view []
   [:div
-   (for [[name tomato] @tomato-state]
-     ^{:key name} [tomato-view [name tomato]])])
+   (for [[user-id tomato] @tomato-state]
+     ^{:key user-id} [tomato-view [user-id tomato]])])

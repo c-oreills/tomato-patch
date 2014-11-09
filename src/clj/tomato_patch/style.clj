@@ -16,6 +16,9 @@
   [[:.text-center
     {:text-align "center"}]
 
+   [:.clickable
+    {:cursor "pointer"}]
+
 
    [:.tomato-container
     {:position "absolute"}]

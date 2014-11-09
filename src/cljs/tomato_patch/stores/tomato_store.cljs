@@ -1,28 +1,14 @@
 (ns tomato-patch.stores.tomato-store
   (:require
-   [cljs-time.coerce :as time-coerce]
+   [cljs-time.core :as time]
    [reagent.core :refer [atom]]
-   [tomato-patch.stores.user-store :refer [current-user?]]
-   [tomato-patch.util :refer [map-map dial-path circle-positions]]
-   ))
+   [tomato-patch.dispatcher :refer [register-callback]]
+   [tomato-patch.stores.tick-store :refer [get-time]]
+   [tomato-patch.stores.user-store :refer [current-user? get-current-user-id]]
+   [tomato-patch.util :refer [map-map dial-path circle-positions]]))
 
 
 (def tomato-length (* 25 60))
-
-(def tomato-state
-  (atom
-   {"christy" {:ending (time-coerce/from-string "2014-09-19T22:02:23.663Z")
-               :secs-left (* 10 60)}
-    "tomato" {:ending (time-coerce/from-string "2014-09-19T22:12:23.663Z")
-              :secs-left 150}
-    "pieface" {:ending (time-coerce/from-string "2014-09-19T22:12:23.663Z")
-               :secs-left 15}
-    "egg" {:ending (time-coerce/from-string "2014-09-19T22:12:23.663Z")
-           :secs-left 715}
-    "cheese" {:ending (time-coerce/from-string "2014-09-19T22:12:23.663Z")
-              :secs-left 515}
-    "el burro" {:ending (time-coerce/from-string "2014-09-19T22:12:23.663Z")
-                :secs-left 815}}))
 
 
 (defn position-tomatoes [tomatoes]
@@ -38,10 +24,41 @@
                     (repeat [(/ js/window.innerWidth 2) (/ js/window.innerHeight 2)]))))))
 
 
-(swap! tomato-state position-tomatoes)
+(def tomato-state
+  (atom
+   (position-tomatoes
+    {1 {:ending (time/plus (time/now) (time/minutes 10))}
+     2 {:ending (time/plus (time/now) (time/seconds 150))}
+     3 {:ending (time/plus (time/now) (time/seconds 15))}
+     4 {:ending (time/plus (time/now) (time/minutes 5))}
+     5 {:ending (time/plus (time/now) (time/minutes 2))}
+     6 {:ending (time/plus (time/now) (time/minutes 8))}})))
 
 
-(defn countdown []
-  (swap! tomato-state map-map (fn [v] (update-in v [:secs-left] dec))))
+(defn secs-left [tomato]
+  (let [times [(get-time) (tomato :ending)]
+        sorted-times (sort times)
+        parity (if (= times sorted-times) 1 -1)]
+    (* parity (time/in-seconds (apply time/interval sorted-times)))))
 
-(js/setInterval countdown 1000)
+
+(defn- handle-own-tomato-click []
+  (js/console.log "click own" (get-current-user-id)))
+
+
+(defn- handle-other-tomato-click [user-id]
+  (js/console.log "click other" user-id))
+
+
+(defn- handle-tomato-click [user-id]
+  (if (current-user? user-id)
+    (handle-own-tomato-click)
+    (handle-other-tomato-click user-id)))
+
+
+(def token
+  (register-callback
+   (fn [payload]
+     (case (payload :type)
+       :tomato-click (handle-tomato-click (payload :user-id))
+       nil))))

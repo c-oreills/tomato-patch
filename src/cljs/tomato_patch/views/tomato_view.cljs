@@ -31,7 +31,7 @@
   [[user-id tomato]]
   (let [[height-offset width-offset] (get-offsets)
         user (get-user user-id)
-        secs-left (secs-left tomato)
+        secs-left (secs-left user-id)
         tomato-perc (min-max
                      (- 1 (/ secs-left tomato-length)))]
     [:div.tomato-container
@@ -46,7 +46,9 @@
        {:style {:-webkit-clip-path
                 (dial-path 150 140 tomato-perc)}}]]
      [:div.text-center
-      (friendly-secs-left secs-left)]]))
+      (if (nil? secs-left)
+        "Stopped"
+        (friendly-secs-left secs-left))]]))
 
 
 (def tomato-view

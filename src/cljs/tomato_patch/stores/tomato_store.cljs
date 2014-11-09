@@ -27,27 +27,88 @@
 (def tomato-state
   (atom
    (position-tomatoes
-    {1 {:ending (time/plus (time/now) (time/minutes 10))}
-     2 {:ending (time/plus (time/now) (time/seconds 150))}
-     3 {:ending (time/plus (time/now) (time/seconds 15))}
-     4 {:ending (time/plus (time/now) (time/minutes 5))}
-     5 {:ending (time/plus (time/now) (time/minutes 2))}
-     6 {:ending (time/plus (time/now) (time/minutes 8))}})))
+    {1 {:status :running
+        :ending (time/plus (time/now) (time/minutes 5))}
+     2 {:status :running
+        :ending (time/plus (time/now) (time/seconds 150))}
+     3 {:status :running
+        :ending (time/plus (time/now) (time/seconds 15))}
+     4 {:status :stopped}
+     5 {:status :running
+        :ending (time/plus (time/now) (time/minutes 2))}
+     6 {:status :stopped}})))
 
 
-(defn secs-left [tomato]
-  (let [times [(get-time) (tomato :ending)]
-        sorted-times (sort times)
-        parity (if (= times sorted-times) 1 -1)]
-    (* parity (time/in-seconds (apply time/interval sorted-times)))))
+(defn- get-ending [user-id]
+  (let [tomato (get-tomato user-id)]
+    (case (tomato :status)
+      :running (tomato :ending)
+      :synced (get-ending (tomato :synced-to))
+      nil)))
+
+
+(defn secs-left [user-id]
+  (when-let [ending (get-ending user-id)]
+    (let [times [(get-time) ending]
+          sorted-times (sort times)
+          parity (if (= times sorted-times) 1 -1)]
+      (* (time/in-seconds (apply time/interval sorted-times))
+         parity))))
+
+
+(defn get-tomato [user-id]
+  (@tomato-state user-id))
+
+
+(defn- update-tomato [user-id f & args]
+  (swap! tomato-state
+         (fn [m]
+           (assoc m user-id (apply f (m user-id) args)))))
+
+
+(defn- start-tomato [user-id]
+  (update-tomato user-id
+                 assoc
+                 :status :running
+                 :ending (time/plus (time/now) (time/seconds tomato-length))))
+
+
+(defn- stop-tomato [user-id]
+  (update-tomato user-id
+                 #(-> %
+                      (assoc :status :stoped)
+                      (dissoc :ending))))
+
+
+(defn- sync-tomatoes [from-user-id to-user-id]
+  (update-tomato from-user-id
+                 assoc
+                 :status :synced
+                 :synced-to to-user-id))
+
+
+(defn- unsync-tomato [user-id]
+  (update-tomato user-id
+                 #(-> %
+                      (assoc :status :running)
+                      (dissoc :synced-to))))
 
 
 (defn- handle-own-tomato-click []
-  (js/console.log "click own" (get-current-user-id)))
+  (let [user-id (get-current-user-id)
+        tomato (get-tomato user-id)]
+    (if (= (tomato :status) :running)
+      (stop-tomato user-id)
+      (start-tomato user-id))))
 
 
 (defn- handle-other-tomato-click [user-id]
-  (js/console.log "click other" user-id))
+  (let [tomato (get-tomato user-id)
+        current-user-tomato (get-tomato (get-current-user-id))]
+    (when (contains? #{:running :synced} (tomato :status))
+      (if (= (current-user-tomato :synced-to) user-id)
+        (unsync-tomato (get-current-user-id))
+        (sync-tomatoes (get-current-user-id) user-id)))))
 
 
 (defn- handle-tomato-click [user-id]
